@@ -4,6 +4,7 @@ use chrono::offset::Utc;
 use chrono::{DateTime, ParseError};
 use std::collections::HashMap;
 use std::num::ParseIntError;
+use std::str::FromStr;
 use xmltree::Element;
 
 #[derive(Debug, PartialEq)]
@@ -250,28 +251,12 @@ impl BuildElement for Element {
 
     fn as_int(&self) -> Result<i32, Error> {
         let text = get_typed_string(self, "int")?;
-        Ok(match text.parse() {
-            Ok(ref value) => *value,
-            Err(e) => {
-                return Err(Error::ParseIntError {
-                    name: self.name.clone(),
-                    inner: e,
-                });
-            }
-        })
+        parse_int(text, &self.name)
     }
 
     fn as_long(&self) -> Result<i64, Error> {
         let text = get_typed_string(self, "long")?;
-        Ok(match text.parse() {
-            Ok(ref value) => *value,
-            Err(e) => {
-                return Err(Error::ParseIntError {
-                    name: self.name.clone(),
-                    inner: e,
-                });
-            }
-        })
+        parse_int(text, &self.name)
     }
 
     fn as_string(&self) -> Result<String, Error> {
@@ -305,6 +290,18 @@ fn get_typed_string(element: &Element, value_type: &str) -> Result<String, Error
                 name: element.name.clone(),
                 expected_type: ["*:", value_type].concat(),
                 given: other_type.cloned(),
+            });
+        }
+    })
+}
+
+fn parse_int<T: FromStr<Err = ParseIntError>>(text: String, name: &str) -> Result<T, Error> {
+    Ok(match text.parse() {
+        Ok(value) => value,
+        Err(e) => {
+            return Err(Error::ParseIntError {
+                name: name.into(),
+                inner: e,
             });
         }
     })
