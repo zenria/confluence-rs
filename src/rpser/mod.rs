@@ -6,6 +6,8 @@ use std::fmt;
 use std::result;
 
 use self::xml::BuildElement;
+use std::error::Error;
+use std::fmt::{Display, Formatter};
 use xmltree::Element;
 
 /// XML method representation.
@@ -66,18 +68,20 @@ impl Response {
         if element.name != "Envelope" {
             return Err(RpcError::UnexpectedElement { tag: element.name });
         }
-        element = try!(element.descend(&["Body"]));
-        element = try!(element.descend_first());
+        element = element.descend(&["Body"])?;
+        element = element.descend_first()?;
 
         if element.name == "Fault" {
             return Err(RpcError::Fault {
-                fault_code: try!(element.get_at_path(&["faultcode"]))
+                fault_code: element
+                    .get_at_path(&["faultcode"])?
                     .text
                     .unwrap_or_default(),
-                fault_string: try!(element.get_at_path(&["faultstring"]))
+                fault_string: element
+                    .get_at_path(&["faultstring"])?
                     .text
                     .unwrap_or_default(),
-                fault_detail: Box::new(try!(element.get_at_path(&["detail"]))),
+                fault_detail: Box::new(element.get_at_path(&["detail"])?),
             });
         }
 
@@ -114,6 +118,14 @@ pub enum RpcError {
     ElementNotFound {
         path: Vec<String>,
     },
+}
+
+impl Error for RpcError {}
+
+impl Display for RpcError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl From<self::xml::Error> for RpcError {
