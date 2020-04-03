@@ -40,10 +40,11 @@ use self::rpser::{Method, RpcError};
 use std::fmt::{Display, Formatter};
 use xmltree::Element;
 
-const V2_API_RPC_PATH: &str = "/rpc/soap-axis/confluenceservice-v2?wsdl";
+const V2_API_RPC_PATH: &str = "/rpc/soap-axis/confluenceservice-v1?wsdl";
 
 /// Client's session.
 pub struct Session {
+    root_url: String,
     wsdl: wsdl::Wsdl,
     token: String,
 }
@@ -82,6 +83,7 @@ impl Session {
 
         let wsdl = wsdl::fetch(&wsdl_url)?;
         let mut session = Session {
+            root_url: url.into(),
             wsdl,
             token: String::new(),
         };
@@ -267,7 +269,7 @@ impl Session {
     session.store_page(page.into());
     ```
     */
-    pub fn store_page(&self, page: UpdatePage) -> Result<Page> {
+    pub fn store_page(&self, page: UpdatePage) -> Result<()> {
         let mut element_items = vec![
             Element::node("space").with_text(page.space),
             Element::node("title").with_text(page.title),
@@ -294,7 +296,7 @@ impl Session {
 
         let element = response.body.descend(&["storePageReturn"])?;
 
-        Page::from_element(element)
+        Ok(())
     }
 
     /**
@@ -401,6 +403,15 @@ impl Session {
             Some(ref op) => &op.url,
         };
 
+        // XXX hack to get rid of localhost bug on *very* old confluence instances, specific to *my* instance (huge hack)
+        let url = {
+            if url.contains("http://localhost:8040") {
+                url.replace("http://localhost:8040", &self.root_url)
+            } else {
+                url.clone()
+            }
+        };
+
         // do now show password in logs
         if method.name == "login" {
             debug!("[call] login ******");
@@ -408,14 +419,14 @@ impl Session {
             debug!("[call] {}", method);
         }
 
-        let envelope = method.as_xml(url);
+        let envelope = method.as_xml(&url);
 
         // do now show password in logs
         if method.name != "login" {
             trace!("[method xml] {}", envelope);
         }
 
-        let http_response = http::soap_action(url, &method.name, &envelope)?;
+        let http_response = http::soap_action(&url, &method.name, &envelope)?;
 
         trace!("[response xml] {}", http_response.body);
 
